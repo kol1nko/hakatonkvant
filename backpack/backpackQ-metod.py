@@ -13,7 +13,7 @@ from dimod import BinaryQuadraticModel
 # возможных комбинаций акций, что делает его подходящим для поиска оптимального решения в данной финансовой задаче.
 
 # Чтение данных из CSV-файла
-file_path = "/mnt/data/task-1-stocks (3).csv"
+file_path = "/kolin/Downloads/task-1-stocks (3).csv"
 data = pd.read_csv(file_path)
 
 # Вычисление доходностей и ковариационной матрицы
