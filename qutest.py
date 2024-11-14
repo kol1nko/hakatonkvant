@@ -1,4 +1,3 @@
 import qiskit
 
-print(qiskit.__qiskit_version__)
-
+print(";)")
