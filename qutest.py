@@ -1,3 +1,3 @@
 import qiskit
 
-print(";)")
+print("xDxDxD")
