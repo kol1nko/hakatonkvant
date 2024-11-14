@@ -1,71 +1,64 @@
 import numpy as np
 import pandas as pd
 from qiskit import Aer
-from qiskit.utils import QuantumInstance
 from qiskit.algorithms import QAOA
 from qiskit_optimization import QuadraticProgram
 from qiskit_optimization.algorithms import MinimumEigenOptimizer
 from qiskit.algorithms.optimizers import COBYLA
 
-# Загрузка и подготовка данных
-data = pd.read_csv("/path/to/task-1-stocks.csv")
+# Загрузка данных о доходности и ковариации
+data = pd.read_csv("/path/to/your/task-1-stocks.csv")
 returns = data.pct_change().dropna()
 mean_returns = returns.mean()
 cov_matrix = returns.cov()
 
-portfolio_value = 1_000_000
-risk_tolerance = 0.2
-num_assets = len(mean_returns)
+# Параметры задачи
+num_assets = 10  # Упрощенная задача с 10 активами
+target_risk = 0.2
+lambda_risk = 0.5  # Коэффициент для контроля риска
+k = 5  # Ограничение на количество активов в портфеле
 
-# Конфигурация задачи оптимизации
-quadratic_program = QuadraticProgram()
+# Создание квадратичной программы для оптимизации
+qp = QuadraticProgram()
 
-# Добавление переменных и их ограничений
+# Добавление бинарных переменных для каждого актива
 for i in range(num_assets):
-    quadratic_program.binary_var(name=f"x{i}")
+    qp.binary_var(name=f"x{i}")
 
-# Матрица ковариации (риск) и ожидаемая доходность для целевой функции
-mu = mean_returns.values
-sigma = cov_matrix.values
+# Целевая функция: максимизация доходности с учетом риска
+return_vector = mean_returns[:num_assets].values
+for i in range(num_assets):
+    for j in range(num_assets):
+        if i == j:
+            qp.objective.set_linear(
+                i, -return_vector[i] + lambda_risk * cov_matrix.iloc[i, i]
+            )
+        else:
+            qp.objective.set_quadratic(i, j, lambda_risk * cov_matrix.iloc[i, j])
 
-# Целевая функция: максимизация доходности - коэффициент риска
-# В Qiskit мы минимизируем - целевая функция будет `-доходность + риск`
-risk_penalty = 100 * risk_tolerance
-quadratic_program.maximize(
-    linear=[mu[i] for i in range(num_assets)],
-    quadratic={
-        (i, j): -risk_penalty * sigma[i, j]
-        for i in range(num_assets)
-        for j in range(num_assets)
-    },
+# Ограничение на количество активов
+qp.linear_constraint(
+    linear={f"x{i}": 1 for i in range(num_assets)},
+    sense="==",
+    rhs=k,
+    name="asset_constraint",
 )
 
-# Ограничение на вес суммарных инвестиций
-quadratic_program.linear_constraint(
-    linear={f"x{i}": 1 for i in range(num_assets)}, sense="==", rhs=1
-)
-
-# Настройка квантового симулятора и алгоритма QAOA
-backend = Aer.get_backend("qasm_simulator")
-quantum_instance = QuantumInstance(backend, shots=1024)
-qaoa = QAOA(optimizer=COBYLA(), quantum_instance=quantum_instance)
-optimizer = MinimumEigenOptimizer(qaoa)
+# Настройка квантового симулятора и QAOA
+backend = Aer.get_backend("qasm_simulator")  # Задаем симулятор напрямую
+qaoa = QAOA(reps=3, optimizer=COBYLA())  # Параметры QAOA
+optimizer = MinimumEigenOptimizer(qaoa)  # Используем QAOA для оптимизации
 
 # Запуск оптимизации
-result = optimizer.solve(quadratic_program)
+result = optimizer.solve(qp)
 
-# Интерпретация и отображение результатов
-optimized_weights = np.array([result.x[i] for i in range(num_assets)])
-portfolio_return = np.dot(optimized_weights, mean_returns)
-portfolio_risk = np.sqrt(
-    np.dot(optimized_weights.T, np.dot(cov_matrix, optimized_weights))
+# Обработка и вывод результатов
+selected_assets = [i for i in range(num_assets) if result.x[i] > 0.5]
+optimized_return = sum(return_vector[i] for i in selected_assets)
+optimized_risk = np.sqrt(
+    sum(cov_matrix.iloc[i, j] for i in selected_assets for j in selected_assets)
 )
 
-# Показать результат
-print("Оптимизированный портфель:")
-for i, weight in enumerate(optimized_weights):
-    if weight > 0:
-        print(f"Акция {data.columns[i]}: Вес {weight:.2f}")
-
-print(f"Доходность портфеля: {portfolio_return:.4f}")
-print(f"Риск портфеля: {portfolio_risk:.4f}")
+print("Выбранные активы:", selected_assets)
+print("Ожидаемая доходность портфеля:", optimized_return)
+print("Ожидаемый риск портфеля:", optimized_risk)
