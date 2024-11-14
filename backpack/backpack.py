@@ -7,7 +7,7 @@ from qiskit_optimization.algorithms import MinimumEigenOptimizer
 from qiskit.algorithms.optimizers import COBYLA
 
 # Загрузка данных о доходности и ковариации
-data = pd.read_csv("/path/to/your/task-1-stocks.csv")
+data = pd.read_csv("/task-1-stocks.csv")
 returns = data.pct_change().dropna()
 mean_returns = returns.mean()
 cov_matrix = returns.cov()
